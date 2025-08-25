@@ -31,15 +31,16 @@ function parseCSV(text) {
     const row = [];
     let match;
     while (match = regex.exec(line)) {
-      row.push((match[1] || match[2]).trim());
+      // Ensure undefined cells are treated as empty string
+      row.push(((match[1] || match[2]) || "").trim());
     }
     return row;
   });
 }
 
-// Clean hidden characters in all cells
+// Clean hidden characters and ensure all cells are strings
 function cleanSheetData(data) {
-  return data.map(row => row.map(cell => cell.trim().replace(/[\u200B-\u200D\uFEFF]/g, '')));
+  return data.map(row => row.map(cell => (cell || "").trim().replace(/[\u200B-\u200D\uFEFF]/g, '')));
 }
 
 // Fetch the sheet once
@@ -52,7 +53,7 @@ fetch(CSV_URL)
   .catch(err => alert("Error loading sheet: " + err));
 
 function normalize(str) {
-  return str.toLowerCase().replace(/\s+/g,'').replace(/[\u200B-\u200D\uFEFF]/g,'');
+  return (str || "").toLowerCase().replace(/\s+/g,'').replace(/[\u200B-\u200D\uFEFF]/g,'');
 }
 
 function loadCalendar() {
