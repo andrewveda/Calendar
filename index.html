@@ -24,6 +24,20 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSY6GoSKJV0QtE
 
 let sheetData = [];
 
+// Robust CSV parser (handles commas inside quotes)
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  return lines.map(line => {
+    const regex = /(?:\"([^\"]*)\")|([^,]+)/g;
+    const row = [];
+    let match;
+    while (match = regex.exec(line)) {
+      row.push((match[1] || match[2]).trim());
+    }
+    return row;
+  });
+}
+
 // Fetch the sheet once
 fetch(CSV_URL)
   .then(res => res.text())
@@ -32,16 +46,10 @@ fetch(CSV_URL)
   })
   .catch(err => alert("Error loading sheet: " + err));
 
-function parseCSV(text) {
-  const rows = text.trim().split('\n');
-  return rows.map(row => row.split(','));
-}
-
 function loadCalendar() {
   const nameInput = document.getElementById('name').value.trim().toLowerCase();
   if (!nameInput) return alert('Enter your name!');
 
-  // Find the user row (case-insensitive)
   const userRow = sheetData.find(row => row[1].toLowerCase() === nameInput);
   if (!userRow) return alert("User not found!");
 
