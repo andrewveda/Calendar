@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quest Calendar</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; background: #f0f0f0; }
+  input, button { padding: 8px; margin: 5px; font-size: 16px; }
+  table { border-collapse: collapse; margin: 20px auto; }
+  td, th { width: 40px; height: 40px; border: 1px solid #ccc; text-align: center; vertical-align: middle; }
+  .done { color: red; font-weight: bold; }
+</style>
+</head>
+<body>
+<h2>Enter Your Name</h2>
+<input type="text" id="name" placeholder="Your Name">
+<button onclick="loadCalendar()">Show Calendar</button>
+
+<div id="userDetails"></div>
+<div id="calendar"></div>
+
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSY6GoSKJV0QtEE8eA4ALdmOEMwE_QiXuF5JAAEpLbP8bisUYKv_iPVXpOXHP6ytfOHf7wtoR-8mVG/pubhtml?gid=595015100&single=true"; // Replace with your published CSV URL
+
+let sheetData = [];
+
+// Fetch the sheet once
+fetch(CSV_URL)
+  .then(res => res.text())
+  .then(text => {
+    sheetData = parseCSV(text);
+  })
+  .catch(err => alert("Error loading sheet: " + err));
+
+function parseCSV(text) {
+  const rows = text.trim().split('\n');
+  return rows.map(row => row.split(','));
+}
+
+function loadCalendar() {
+  const nameInput = document.getElementById('name').value.trim().toLowerCase();
+  if (!nameInput) return alert('Enter your name!');
+
+  // Find the user row (case-insensitive)
+  const userRow = sheetData.find(row => row[1].toLowerCase() === nameInput);
+  if (!userRow) return alert("User not found!");
+
+  const user = {
+    name: userRow[1],
+    totalCorrect: userRow[3],
+    totalWrong: userRow[4],
+    quests: userRow[7] ? userRow[7].split(',').map(q => q.trim()) : [],
+    challenges: userRow[8] ? userRow[8].split(',').map(c => c.trim()) : []
+  };
+
+  renderCalendar(user);
+}
+
+function renderCalendar(user) {
+  document.getElementById('userDetails').innerHTML = `
+    <h3>${user.name}'s Quest Stats</h3>
+    <p>Total Correct: ${user.totalCorrect}, Total Wrong: ${user.totalWrong}</p>
+    <p>Quests Completed: ${user.quests.join(", ")}</p>
+  `;
+
+  const today = new Date();
+  const month = today.getMonth();
+  const year = today.getFullYear();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let html = "<table><tr>";
+  const daysOfWeek = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  daysOfWeek.forEach(d => html += `<th>${d}</th>`);
+  html += "</tr><tr>";
+
+  for (let i = 0; i < firstDay; i++) html += "<td></td>";
+
+  for (let date = 1; date <= daysInMonth; date++) {
+    const questName = `Quest ${date}`;
+    const done = user.challenges.includes(questName);
+    html += `<td class="${done ? 'done' : ''}">${date}${done ? '🔥' : ''}</td>`;
+    if ((date + firstDay) % 7 === 0) html += "</tr><tr>";
+  }
+
+  html += "</tr></table>";
+  document.getElementById('calendar').innerHTML = html;
+}
+</script>
+</body>
+</html>
