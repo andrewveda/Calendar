@@ -21,7 +21,6 @@
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSY6GoSKJV0QtEE8eA4ALdmOEMwE_QiXuF5JAAEpLbP8bisUYKv_iPVXpOXHP6ytfOHf7wtoR-8mVG/pubhtml?gid=595015100&single=true"; // Replace with your published CSV URL
-
 let sheetData = [];
 
 // Robust CSV parser (handles commas inside quotes)
@@ -38,23 +37,33 @@ function parseCSV(text) {
   });
 }
 
+// Clean hidden characters in all cells
+function cleanSheetData(data) {
+  return data.map(row => row.map(cell => cell.trim().replace(/[\u200B-\u200D\uFEFF]/g, '')));
+}
+
 // Fetch the sheet once
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
-    sheetData = parseCSV(text);
+    sheetData = cleanSheetData(parseCSV(text));
+    console.log("Sheet loaded. Names:", sheetData.map(r => r[1]));
   })
   .catch(err => alert("Error loading sheet: " + err));
 
+function normalize(str) {
+  return str.toLowerCase().replace(/\s+/g,'').replace(/[\u200B-\u200D\uFEFF]/g,'');
+}
+
 function loadCalendar() {
-  const nameInput = document.getElementById('name').value.trim().toLowerCase();
+  const nameInput = document.getElementById('name').value.trim();
   if (!nameInput) return alert('Enter your name!');
 
-  const userRow = sheetData.find(row => row[1].toLowerCase() === nameInput);
+  const userRow = sheetData.find(row => normalize(row[1]) === normalize(nameInput));
   if (!userRow) return alert("User not found!");
 
   const user = {
-    name: userRow[1],
+    name: userRow[1].trim(),
     totalCorrect: userRow[3],
     totalWrong: userRow[4],
     quests: userRow[7] ? userRow[7].split(',').map(q => q.trim()) : [],
