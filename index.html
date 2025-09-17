@@ -2,108 +2,343 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Quest Calendar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quest & Video Calendar</title>
 <style>
-  body { font-family: Arial, sans-serif; text-align: center; background: #f0f0f0; }
-  input, button { padding: 8px; margin: 5px; font-size: 16px; }
-  table { border-collapse: collapse; margin: 20px auto; }
-  td, th { width: 40px; height: 40px; border: 1px solid #ccc; text-align: center; vertical-align: middle; }
-  .done { color: red; font-weight: bold; }
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: radial-gradient(circle at 20% 20%, #0f2027, #203a43, #2c5364);
+    color: #fff;
+  }
+
+  #nameInputContainer { margin-top: 20px; text-align: center; }
+
+  input, button {
+    padding: 8px 12px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: none;
+    margin: 5px;
+  }
+
+  #loadingQuote { font-family: monospace; font-size: 14px; margin-top: 10px; min-height: 20px; white-space: pre; text-align: center; }
+
+  #userName { font-size: 20px; font-weight: bold; margin-top: 10px; text-align: center; letter-spacing: 1.5px; }
+
+  #totalCorrect { font-size: 16px; margin-top: 5px; color: #ffd700; text-align: center; }
+
+  #missedDays { font-size: 14px; margin-top: 5px; color: #ff8080; text-align: center; }
+
+  #amazingMsg { font-size: 18px; margin-top: 10px; font-weight: bold; color: #00ff99; text-align: center; display:none; }
+
+  #toggleType { margin-top: 10px; background:#2196F3; color:#fff; cursor:pointer; }
+
+  .calendar {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    margin-top: 20px;
+    color: #000;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .calendar-header {
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    background: #4CAF50;
+    color: white;
+    padding: 5px 10px;
+    font-size: 1.2em;
+  }
+
+  .calendar-header button {
+    background:none;
+    border:none;
+    color:white;
+    font-size:1.5em;
+    cursor:pointer;
+  }
+
+  .days-of-week { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+
+  .days-of-week div { padding: 5px 0; background: #ddd; font-weight: bold; font-size: 0.8em; }
+
+  .dates { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 50px; text-align: center; }
+
+  .dates div {
+    font-size: 0.8em;
+    border-radius: 6px;
+    margin: 2px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .dates div.done { background: #ff5555; color: #fff; font-weight: bold; box-shadow: 0 0 5px #fff, 0 0 10px #ff0; }
+
+  .dates div.disabled { background: #ccc; cursor: default; color: #666; }
+
+  .dates div.missed { background: #444; color: #fff; }
+
+  .dates div:hover:not(.disabled) { transform: scale(1.05); box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
+
+  @media (max-width: 420px) {
+    .dates div, .days-of-week div { font-size: 0.7em; }
+    .dates { grid-auto-rows: 45px; }
+  }
 </style>
 </head>
 <body>
-<h2>Enter Your Name</h2>
-<input type="text" id="name" placeholder="Your Name">
-<button onclick="loadCalendar()">Show Calendar</button>
 
-<div id="userDetails"></div>
-<div id="calendar"></div>
+<div id="nameInputContainer">
+  <h2>Enter Your Name</h2>
+  <input type="text" id="name" placeholder="Your Name">
+  <button onclick="showCalendar()">Show Calendar</button>
+</div>
+
+<div id="loadingQuote"></div>
+<div id="userName"></div>
+<div id="totalCorrect"></div>
+<div id="missedDays"></div>
+<div id="amazingMsg">🌟 Amazing! You haven’t missed a single day!</div>
+<button id="toggleType" style="display:none;" onclick="toggleType()">Switch to Videos</button>
+
+<div class="calendar" id="calendarContainer" style="display:none;">
+  <div class="calendar-header">
+    <button onclick="changeMonth(-1)">&#8592;</button>
+    <div id="monthYear"></div>
+    <button onclick="changeMonth(1)">&#8594;</button>
+  </div>
+  <div class="days-of-week">
+    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
+    <div>Thu</div><div>Fri</div><div>Sat</div>
+  </div>
+  <div class="dates" id="datesGrid"></div>
+</div>
 
 <script>
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSY6GoSKJV0QtEE8eA4ALdmOEMwE_QiXuF5JAAEpLbP8bisUYKv_iPVXpOXHP6ytfOHf7wtoR-8mVG/pubhtml?gid=595015100&single=true"; // Replace with your published CSV URL
-let sheetData = [];
+const quote = "Heuristics are mental shortcuts that allow people to solve problems and make judgments quickly and efficiently. ✨🏆🥇🥈🥉✨🔥🎉✅⚡🚀🌟👑🏆🌟💯";
 
-// Robust CSV parser (handles commas inside quotes)
-function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  return lines.map(line => {
-    const regex = /(?:\"([^\"]*)\")|([^,]+)/g;
-    const row = [];
-    let match;
-    while (match = regex.exec(line)) {
-      // Ensure undefined cells are treated as empty string
-      row.push(((match[1] || match[2]) || "").trim());
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let user = null;
+let currentType = 'quest'; // 'quest' or 'video'
+
+const startDate = new Date(2025, 7, 25); // Aug 25, 2025
+let totalMissed = 0;
+
+const questLinks = {
+    1: "https://sites.google.com/view/srm-vec-english/quest/unique-id-copy-of-wh-questions-1",
+    2: "https://sites.google.com/view/cys-english/quest1_1/quest2",
+    3: "https://sites.google.com/view/cys-english/self-introduction-1",
+    4: "https://sites.google.com/view/cys-english/self-introduction-2",
+    5: "https://sites.google.com/view/cys-english/self-introduction-3",
+    6: "https://sites.google.com/view/srm-vec-english/quest/film-review",
+    7: "https://sites.google.com/view/srm-vec-english/quest/pronouns-1",
+    8: "https://sites.google.com/view/srm-vec-english/quest/pronouns-2",
+    9: "https://sites.google.com/view/srm-vec-english/quest/parts-of-speech-1",
+    10: "https://sites.google.com/view/srm-vec-english/quest/question-tags-1",
+    11: "https://sites.google.com/view/srm-vec-english/quest/question-tags-2",
+    12: "https://sites.google.com/view/srm-vec-english/quest/subject-verb-agreement",
+    13: "https://sites.google.com/view/srm-vec-english/quest/comparative-1",
+    14: "https://sites.google.com/view/srm-vec-english/quest/comparative-2",
+    15: "https://sites.google.com/view/srm-vec-english/quest/discourse-markers",
+    16: "https://sites.google.com/view/srm-vec-english/quest/past-1",
+    17: "https://sites.google.com/view/cys-english/questyesno1",
+    18: "https://sites.google.com/view/srm-vec-english/quest/yesno-2",
+    19: "https://sites.google.com/view/srm-vec-english/quest/one-word-substitution-2",
+    20: "https://sites.google.com/view/cys-english/match1",
+    21: "https://sites.google.com/view/cys-english/match2",
+    22: "https://sites.google.com/view/cys-english/past",
+    23: "https://sites.google.com/view/cys-english/homophone1",
+    24: "https://sites.google.com/view/cys-english/homophone2",
+    25: "https://sites.google.com/view/cys-english/comparisons1",
+    26: "https://sites.google.com/view/cys-english/comparisons2",
+    27: "https://sites.google.com/view/cys-english/discoursemarkers",
+    28: "https://sites.google.com/view/cys-english/article"
+};
+
+const videoLinks = {
+    1: "https://sites.google.com/view/cys-english/video-quests",
+    2: "https://sites.google.com/view/cys-english/video-quests",
+    3: "https://sites.google.com/view/cys-english/video-quests",
+    4: "https://sites.google.com/view/cys-english/video-quests",
+   5: "https://sites.google.com/view/cys-english/video-quests",
+    6: "https://sites.google.com/view/cys-english/video-quests",
+    7: "https://sites.google.com/view/cys-english/video-quests",
+   8: "https://sites.google.com/view/cys-english/video-quests",
+    9: "https://sites.google.com/view/cys-english/video-quests",
+    10: "https://sites.google.com/view/cys-english/video-quests",
+   11: "https://sites.google.com/view/cys-english/video-quests",
+    12: "https://sites.google.com/view/cys-english/video-quests",
+    13: "https://sites.google.com/view/cys-english/video-quests",
+   14: "https://sites.google.com/view/cys-english/video-quests",
+    15: "https://sites.google.com/view/cys-english/video-quests",
+    16: "https://sites.google.com/view/cys-english/video-quests",
+   17: "https://sites.google.com/view/cys-english/video-quests",
+    18: "https://sites.google.com/view/cys-english/video-quests",
+    19: "https://sites.google.com/view/cys-english/video-quests",
+   20: "https://sites.google.com/view/cys-english/video-quests",
+    21: "https://sites.google.com/view/cys-english/video-quests",
+    22: "https://sites.google.com/view/cys-english/video-quests",
+   23: "https://sites.google.com/view/cys-english/video-quests",
+    24: "https://sites.google.com/view/cys-english/video-quests",
+    25: "https://sites.google.com/view/cys-english/video-quests",
+   26: "https://sites.google.com/view/cys-english/video-quests",
+    27: "https://sites.google.com/view/cys-english/video-quests",
+    28: "https://sites.google.com/view/cys-english/video-quests",
+   29: "https://sites.google.com/view/cys-english/video-quests",
+    30: "https://sites.google.com/view/cys-english/video-quests",
+    31: "https://sites.google.com/view/cys-english/video-quests",
+   32: "https://sites.google.com/view/cys-english/video-quests",
+    33: "https://sites.google.com/view/cys-english/video-quests",
+    34: "https://sites.google.com/view/cys-english/video-quests"
+};
+
+function typeWriter(text, element, callback=null) {
+  let i = 0;
+  element.textContent = "";
+  const interval = setInterval(() => {
+    element.textContent += text.charAt(i);
+    i++;
+    if(i >= text.length){
+      clearInterval(interval);
+      if(callback) callback();
     }
-    return row;
-  });
+  }, 30);
 }
 
-// Clean hidden characters and ensure all cells are strings
-function cleanSheetData(data) {
-  return data.map(row => row.map(cell => (cell || "").trim().replace(/[\u200B-\u200D\uFEFF]/g, '')));
+async function showCalendar() {
+  const nameInput = document.getElementById('name');
+  const name = nameInput.value.trim();
+  if(!name) return alert('Please enter your name!');
+
+  document.getElementById('nameInputContainer').style.display = 'none';
+  const quoteEl = document.getElementById('loadingQuote');
+  typeWriter(quote, quoteEl);
+
+  try {
+    const res = await fetch("https://script.google.com/macros/s/AKfycbzPmoVR2sfZFgrh7YGxag018JF3HtIkDq3AG65Tt_psWgWLGvbERINZw7lP9wuupbVd/exec");
+    const data = await res.json();
+
+    user = data.find(u => u.Name.toUpperCase() === name.toUpperCase()) || {
+      Name: name.toUpperCase(),
+      Quests: 0,
+      TotalCorrect: 0,
+      Challenges: [] // safe for new users
+    };
+
+    quoteEl.textContent = "";
+    document.getElementById('userName').textContent = user.Name.toUpperCase();
+    document.getElementById('totalCorrect').textContent = 
+      `🔥 QUESTS COMPLETED: ${user.Quests || 0} | TOTAL CORRECT: ${user.TotalCorrect || 0}`;
+
+    document.getElementById('calendarContainer').style.display = 'grid';
+    document.getElementById('toggleType').style.display = 'inline-block';
+
+    totalMissed = 0;
+    renderCalendar(currentMonth, currentYear, currentType);
+  } catch(err){
+    quoteEl.textContent = "Error loading data!";
+    console.error(err);
+  }
 }
 
-// Fetch the sheet once
-fetch(CSV_URL)
-  .then(res => res.text())
-  .then(text => {
-    sheetData = cleanSheetData(parseCSV(text));
-    console.log("Sheet loaded. Names:", sheetData.map(r => r[1]));
-  })
-  .catch(err => alert("Error loading sheet: " + err));
+function toggleType() {
+  currentType = currentType === 'quest' ? 'video' : 'quest';
+  const btn = document.getElementById('toggleType');
+  btn.textContent = currentType === 'quest' ? 'Switch to Videos' : 'Switch to Quests';
 
-function normalize(str) {
-  return (str || "").toLowerCase().replace(/\s+/g,'').replace(/[\u200B-\u200D\uFEFF]/g,'');
+  const count = user.Quests;
+  const total = user.TotalCorrect;
+  document.getElementById('totalCorrect').textContent = 
+      `🔥 ${currentType.toUpperCase()}S COMPLETED: ${count || 0} | TOTAL CORRECT: ${total || 0}`;
+
+  totalMissed = 0;
+  renderCalendar(currentMonth, currentYear, currentType);
 }
 
-function loadCalendar() {
-  const nameInput = document.getElementById('name').value.trim();
-  if (!nameInput) return alert('Enter your name!');
-
-  const userRow = sheetData.find(row => normalize(row[1]) === normalize(nameInput));
-  if (!userRow) return alert("User not found!");
-
-  const user = {
-    name: userRow[1].trim(),
-    totalCorrect: userRow[3],
-    totalWrong: userRow[4],
-    quests: userRow[7] ? userRow[7].split(',').map(q => q.trim()) : [],
-    challenges: userRow[8] ? userRow[8].split(',').map(c => c.trim()) : []
-  };
-
-  renderCalendar(user);
+function changeMonth(direction) {
+  currentMonth += direction;
+  if (currentMonth < 0) {
+    currentMonth = 11;
+    currentYear--;
+  } else if (currentMonth > 11) {
+    currentMonth = 0;
+    currentYear++;
+  }
+  renderCalendar(currentMonth, currentYear, currentType);
 }
 
-function renderCalendar(user) {
-  document.getElementById('userDetails').innerHTML = `
-    <h3>${user.name}'s Quest Stats</h3>
-    <p>Total Correct: ${user.totalCorrect}, Total Wrong: ${user.totalWrong}</p>
-    <p>Quests Completed: ${user.quests.join(", ")}</p>
-  `;
-
-  const today = new Date();
-  const month = today.getMonth();
-  const year = today.getFullYear();
-  const firstDay = new Date(year, month, 1).getDay();
+function renderCalendar(month, year, type) {
+  const datesGrid = document.getElementById('datesGrid');
+  const monthYear = document.getElementById('monthYear');
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  monthYear.innerText = new Date(year, month).toLocaleString('default', { month: 'long' }) + ' ' + year;
+  datesGrid.innerHTML = '';
 
-  let html = "<table><tr>";
-  const daysOfWeek = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  daysOfWeek.forEach(d => html += `<th>${d}</th>`);
-  html += "</tr><tr>";
-
-  for (let i = 0; i < firstDay; i++) html += "<td></td>";
-
-  for (let date = 1; date <= daysInMonth; date++) {
-    const questName = `Quest ${date}`;
-    const done = user.challenges.includes(questName);
-    html += `<td class="${done ? 'done' : ''}">${date}${done ? '🔥' : ''}</td>`;
-    if ((date + firstDay) % 7 === 0) html += "</tr><tr>";
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  for(let i = 0; i < firstDayOfMonth; i++){
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'disabled';
+    datesGrid.appendChild(emptyDiv);
   }
 
-  html += "</tr></table>";
-  document.getElementById('calendar').innerHTML = html;
+  const today = new Date();
+
+  const challengesString = Array.isArray(user.Challenges) ? user.Challenges.join(",") : (user.Challenges || "");
+  const challenges = challengesString
+                     .split(",")
+                     .map(c => c.trim())
+                     .filter(c => type === 'quest' ? c.startsWith('Quest') : c.startsWith('Video'));
+
+  for(let d = 1; d <= daysInMonth; d++){
+    const currentDate = new Date(year, month, d);
+    const diffDays = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+    const questNumber = diffDays >= 0 ? diffDays + 1 : null;
+    const questName = questNumber ? `${type === 'quest' ? 'Quest' : 'Video'} ${questNumber}` : null;
+
+    const dayDiv = document.createElement('div');
+
+    if(questName && challenges.includes(questName)){
+      dayDiv.className = 'done';
+      dayDiv.innerText = `${d} 🔥`;
+    } else if (questName) {
+      if(currentDate < today){
+        dayDiv.className = 'missed';
+        totalMissed++;
+      }
+      dayDiv.innerText = d;
+    } else {
+      dayDiv.className = 'disabled';
+      dayDiv.innerText = d;
+    }
+
+    dayDiv.onclick = () => {
+      const link = type === 'quest' ? questLinks[questNumber] : videoLinks[questNumber];
+      if(link) window.open(link, '_blank');
+    };
+
+    datesGrid.appendChild(dayDiv);
+  }
+
+  const missedEl = document.getElementById('missedDays');
+  missedEl.textContent = totalMissed > 0 ? `❌ MISSED: ${totalMissed} days` : '';
+  document.getElementById('amazingMsg').style.display = totalMissed === 0 ? 'block' : 'none';
 }
 </script>
+
 </body>
 </html>
